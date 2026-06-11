@@ -1,5 +1,7 @@
 # Semantic Heatmap & Search Chrome Extension
 
+![Semantic Heatmap & Search Screenshot](icons/screenshot.png)
+
 An elegant Chrome Extension that scans the DOM of any webpage, extracts the text content of its elements, generates high-dimensional semantic embedding vectors locally using **Transformers.js**, and maps those vectors to visual heatmaps or enables real-time concept-based **Semantic Search**.
 
 This turns the page into an interactive visual heatmap where elements with similar meanings have the same color, or where you can search for concepts and see matching elements highlighted while the rest of the page fades out.
@@ -28,10 +30,11 @@ This turns the page into an interactive visual heatmap where elements with simil
 ├── popup.js                 # Controls popup UI and states, coordinates scripts
 ├── background.js            # Background service worker; loads model, caches vectors & runs PCA
 ├── content.js               # Content script; extracts text, applies styling & highlights search
-├── icons/                   # Generated extension icons
+├── icons/                   # Generated extension icons & screenshots
 │   ├── icon-16.png
 │   ├── icon-48.png
-│   └── icon-128.png
+│   ├── icon-128.png
+│   └── screenshot.png       # UI usage screenshot mockup
 └── lib/
     └── transformers/        # Bundled Transformers.js & ONNX WebAssembly files
         ├── transformers.js
