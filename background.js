@@ -173,7 +173,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   
   if (message.action === 'PROCESS_TEXTS') {
-    const { elements, modelId } = message;
+    const { elements, modelId, tabId } = message;
     
     if (!elements || elements.length === 0) {
       sendResponse({ status: 'error', message: 'No text elements provided.' });
@@ -197,12 +197,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           vectors.push(Array.from(output.data.subarray(start, end)));
         }
         
-        // Cache vectors for semantic search
+        // Cache vectors for semantic search under tab-specific key
         cachedElements = elements.map((el, i) => ({
           id: el.id,
           text: el.text,
           vector: vectors[i]
         }));
+        
+        const storageKey = tabId ? `cachedElements_${tabId}` : 'cachedElements';
+        chrome.storage.local.set({ [storageKey]: cachedElements });
         
         // Run PCA to project high-dimensional vectors to 3D
         const projection = runPCA(vectors, 3);
@@ -277,42 +280,64 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   
   if (message.action === 'SEMANTIC_SEARCH') {
-    const { query, modelId } = message;
+    const { query, modelId, tabId } = message;
     if (!query) {
       sendResponse({ status: 'error', message: 'No search query provided.' });
       return;
     }
-    if (cachedElements.length === 0) {
-      sendResponse({ status: 'error', message: 'No cached page embeddings. Scan the page first.' });
-      return;
-    }
     
-    getExtractor(modelId || currentModelId)
-      .then(async (extractor) => {
-        const queryOutput = await extractor(query, { pooling: 'mean', normalize: true });
-        const queryVector = Array.from(queryOutput.data);
-        
-        const results = cachedElements.map(el => {
-          let score = 0;
-          for (let i = 0; i < queryVector.length; i++) {
-            score += queryVector[i] * el.vector[i];
-          }
-          return {
-            id: el.id,
-            text: el.text,
-            score: score
-          };
-        });
-        
-        // Sort by score descending
-        results.sort((a, b) => b.score - a.score);
-        
-        sendResponse({ status: 'success', results: results });
-      })
-      .catch((error) => {
-        sendResponse({ status: 'error', message: error.message });
-      });
+    const storageKey = tabId ? `cachedElements_${tabId}` : 'cachedElements';
+    chrome.storage.local.get([storageKey], (data) => {
+      const elements = data[storageKey] || [];
+      if (elements.length === 0) {
+        sendResponse({ status: 'error', message: 'No cached page embeddings. Scan the page first.' });
+        return;
+      }
       
+      getExtractor(modelId || currentModelId)
+        .then(async (extractor) => {
+          // Wrap query in array for safe single-item batch inference
+          const queryOutput = await extractor([query], { pooling: 'mean', normalize: true });
+          const queryVector = Array.from(queryOutput.data);
+          
+          const results = elements.map(el => {
+            let score = 0;
+            // Safeguard against missing vectors or different dimensions
+            if (!el.vector || !queryVector) {
+              return { id: el.id, text: el.text, score: 0 };
+            }
+            const len = Math.min(queryVector.length, el.vector.length);
+            for (let i = 0; i < len; i++) {
+              score += queryVector[i] * el.vector[i];
+            }
+            return {
+              id: el.id,
+              text: el.text,
+              score: score
+            };
+          });
+          
+          // Sort by score descending
+          results.sort((a, b) => b.score - a.score);
+          
+          sendResponse({ status: 'success', results: results });
+        })
+        .catch((error) => {
+          sendResponse({ status: 'error', message: error.message });
+        });
+    });
+    
     return true; // Keep channel open for async response
+  }
+});
+
+// Clean up cached elements when a tab is closed or reloaded/navigated
+chrome.tabs.onRemoved.addListener((tabId) => {
+  chrome.storage.local.remove([`cachedElements_${tabId}`]);
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'loading') {
+    chrome.storage.local.remove([`cachedElements_${tabId}`]);
   }
 });

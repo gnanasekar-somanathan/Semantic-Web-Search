@@ -27,14 +27,11 @@ let activeKeyInsight = null;
 
 // Initialize Settings and Listeners
 document.addEventListener('DOMContentLoaded', async () => {
-  // Load saved configurations
+  // Load saved preference configurations
   const settings = await chrome.storage.local.get([
     'model', 
     'highlightMode', 
-    'opacity', 
-    'activeResults', 
-    'keyInsight',
-    'scannedCount'
+    'opacity'
   ]);
   
   if (settings.model) modelSelect.value = settings.model;
@@ -49,21 +46,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     opacityVal.textContent = `${Math.round(settings.opacity * 100)}%`;
   }
 
-  if (settings.activeResults) {
-    activeResults = settings.activeResults;
-    activeKeyInsight = settings.keyInsight || 'No core concepts extracted.';
-    
-    // Restore Visual Elements
-    legendCard.style.display = 'block';
-    searchCard.style.display = 'block';
-    elementsCount.textContent = settings.scannedCount || activeResults.length;
-    
-    // Restore Badge & Status
-    setAnalysisBadgeActive(true);
-    updateProgressBar(100, 'Heatmap Active');
-    
-    // Restore Insights Text
-    insightsText.textContent = activeKeyInsight;
+  // Get active tab and query its scanning status dynamically
+  const tab = await getActiveTab();
+  if (tab) {
+    try {
+      const response = await sendTabMessage(tab.id, { action: 'GET_STATUS' });
+      if (response && response.status === 'success' && response.active) {
+        activeResults = response.results;
+        activeKeyInsight = response.keyInsight || 'No core concepts extracted.';
+        
+        // Restore Visual Elements
+        legendCard.style.display = 'block';
+        searchCard.style.display = 'block';
+        elementsCount.textContent = activeResults.length;
+        
+        // Restore Badge & Status
+        setAnalysisBadgeActive(true);
+        updateProgressBar(100, 'Heatmap Active');
+        
+        // Restore Insights Text
+        insightsText.textContent = activeKeyInsight;
+      } else {
+        // No active scan on this tab
+        legendCard.style.display = 'none';
+        searchCard.style.display = 'none';
+        setAnalysisBadgeActive(false);
+        updateProgressBar(0, 'Ready');
+      }
+    } catch (err) {
+      // Content script not injected yet or tab loading
+      legendCard.style.display = 'none';
+      searchCard.style.display = 'none';
+      setAnalysisBadgeActive(false);
+      updateProgressBar(0, 'Ready');
+    }
   }
 
   // Setup Event Listeners
@@ -117,15 +133,12 @@ function updateSegmentedActive(container, value) {
   });
 }
 
-// Save Settings to Local Storage
+// Save Preferences to Local Storage
 async function saveSettings() {
   await chrome.storage.local.set({
     model: modelSelect.value,
     highlightMode: selectedHighlightMode,
-    opacity: parseFloat(opacitySlider.value),
-    activeResults: activeResults,
-    keyInsight: activeKeyInsight,
-    scannedCount: elementsCount.textContent
+    opacity: parseFloat(opacitySlider.value)
   });
 }
 
@@ -259,7 +272,8 @@ async function handleGenerate() {
       chrome.runtime.sendMessage({
         action: 'PROCESS_TEXTS',
         elements,
-        modelId
+        modelId,
+        tabId: tab.id
       }, (response) => {
         if (chrome.runtime.lastError) {
           reject(chrome.runtime.lastError);
@@ -279,6 +293,7 @@ async function handleGenerate() {
     const applyResponse = await sendTabMessage(tab.id, {
       action: 'APPLY_COLORS',
       results: activeResults,
+      keyInsight: activeKeyInsight,
       colorMode: 'hsl',
       styleMode: 'background',
       opacity: parseFloat(opacitySlider.value)
@@ -415,7 +430,8 @@ async function handleSearch() {
       chrome.runtime.sendMessage({
         action: 'SEMANTIC_SEARCH',
         query: query,
-        modelId: modelSelect.value
+        modelId: modelSelect.value,
+        tabId: tab.id
       }, (res) => {
         if (chrome.runtime.lastError) {
           reject(chrome.runtime.lastError);

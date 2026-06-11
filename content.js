@@ -5,6 +5,7 @@ let lastResults = null;
 let lastColorMode = 'hsl';
 let lastStyleMode = 'background';
 let lastOpacity = 0.4;
+let lastKeyInsight = null;
 
 function escapeHTML(str) {
   return str.replace(/[&<>'"]/g, 
@@ -240,43 +241,6 @@ function clearHeatmap() {
   lastResults = null;
 }
 
-// Listen for messages from background/popup
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'SCAN_DOM') {
-    try {
-      const elements = extractTextElements(message.highlightMode);
-      sendResponse({ status: 'success', elements: elements });
-    } catch (e) {
-      sendResponse({ status: 'error', message: e.message });
-    }
-  } else if (message.action === 'APPLY_COLORS') {
-    try {
-      applyColors(message.results, message.colorMode, message.styleMode, message.opacity);
-      sendResponse({ status: 'success' });
-    } catch (e) {
-      sendResponse({ status: 'error', message: e.message });
-    }
-  } else if (message.action === 'UPDATE_STYLING') {
-    try {
-      if (lastResults) {
-        applyColors(lastResults, message.colorMode, message.styleMode, message.opacity);
-        sendResponse({ status: 'success' });
-      } else {
-        sendResponse({ status: 'error', message: 'No active heatmap to update.' });
-      }
-    } catch (e) {
-      sendResponse({ status: 'error', message: e.message });
-    }
-  } else if (message.action === 'CLEAR_HEATMAP') {
-    try {
-      clearHeatmap();
-      sendResponse({ status: 'success' });
-    } catch (e) {
-      sendResponse({ status: 'error', message: e.message });
-    }
-  }
-});
-
 // Apply search highlights on elements
 function applySearchHighlights(results) {
   if (!document.getElementById('semantic-search-styles')) {
@@ -372,17 +336,18 @@ function scrollToElement(id) {
   }, 1500);
 }
 
-// Listen for messages from background/popup (including search functions)
+// Consolidated Message Listener
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'SCAN_DOM') {
     try {
-      const elements = extractTextElements();
+      const elements = extractTextElements(message.highlightMode);
       sendResponse({ status: 'success', elements: elements });
     } catch (e) {
       sendResponse({ status: 'error', message: e.message });
     }
   } else if (message.action === 'APPLY_COLORS') {
     try {
+      lastKeyInsight = message.keyInsight || null;
       applyColors(message.results, message.colorMode, message.styleMode, message.opacity);
       sendResponse({ status: 'success' });
     } catch (e) {
@@ -402,6 +367,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.action === 'CLEAR_HEATMAP') {
     try {
       clearHeatmap();
+      lastKeyInsight = null;
       sendResponse({ status: 'success' });
     } catch (e) {
       sendResponse({ status: 'error', message: e.message });
@@ -427,5 +393,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } catch (e) {
       sendResponse({ status: 'error', message: e.message });
     }
+  } else if (message.action === 'GET_STATUS') {
+    try {
+      sendResponse({
+        status: 'success',
+        active: lastResults !== null,
+        results: lastResults,
+        keyInsight: lastKeyInsight,
+        colorMode: lastColorMode,
+        styleMode: lastStyleMode,
+        opacity: lastOpacity
+      });
+    } catch (e) {
+      sendResponse({ status: 'error', message: e.message });
+    }
   }
+  return true; // Keep message channel open for async response
 });
