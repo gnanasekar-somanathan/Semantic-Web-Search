@@ -96,11 +96,11 @@ function extractTextElements(highlightMode = 'sentences') {
     
     if (highlightMode === 'paragraphs') {
       const semanticId = `sem-${idCounter++}`;
-      node.setAttribute('data-semantic-id', semanticId);
       elements.push({
         id: semanticId,
         text: cleanText
       });
+      node.innerHTML = `<span data-semantic-id="${semanticId}">${escapeHTML(cleanText)}</span>`;
     } else if (highlightMode === 'sentences') {
       // Split cleanText on punctuation mark boundary
       const sentences = cleanText.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 2);
