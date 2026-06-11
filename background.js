@@ -331,13 +331,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-// Clean up cached elements when a tab is closed or reloaded/navigated
+// Clean up cached elements when a tab is closed
 chrome.tabs.onRemoved.addListener((tabId) => {
   chrome.storage.local.remove([`cachedElements_${tabId}`]);
-});
-
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'loading') {
-    chrome.storage.local.remove([`cachedElements_${tabId}`]);
-  }
 });
