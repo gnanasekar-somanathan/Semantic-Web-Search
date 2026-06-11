@@ -25,6 +25,7 @@ function extractTextElements(highlightMode = 'sentences') {
   
   const elements = [];
   let idCounter = 0;
+  const targets = [];
   
   const walker = document.createTreeWalker(
     document.body,
@@ -75,7 +76,12 @@ function extractTextElements(highlightMode = 'sentences') {
 
   let currentNode;
   while (currentNode = walker.nextNode()) {
-    const cleanText = currentNode.textContent.replace(/\s+/g, ' ').trim();
+    targets.push(currentNode);
+  }
+  
+  // Modify the DOM safely after traversal is fully complete
+  for (const node of targets) {
+    const cleanText = node.textContent.replace(/\s+/g, ' ').trim();
     
     // Skip if empty or matches formatting filter
     if (cleanText.length <= 2 || /^[0-9\s\p{P}]+$/u.test(cleanText)) {
@@ -83,13 +89,13 @@ function extractTextElements(highlightMode = 'sentences') {
     }
     
     // Backup original DOM layout of the container node
-    if (!originalInnerHTMLs.has(currentNode)) {
-      originalInnerHTMLs.set(currentNode, currentNode.innerHTML);
+    if (!originalInnerHTMLs.has(node)) {
+      originalInnerHTMLs.set(node, node.innerHTML);
     }
     
     if (highlightMode === 'paragraphs') {
       const semanticId = `sem-${idCounter++}`;
-      currentNode.setAttribute('data-semantic-id', semanticId);
+      node.setAttribute('data-semantic-id', semanticId);
       elements.push({
         id: semanticId,
         text: cleanText
@@ -106,10 +112,10 @@ function extractTextElements(highlightMode = 'sentences') {
           id: semanticId,
           text: s.trim()
         });
-        return `<span data-semantic-id="${semanticId}" class="semantic-sentence">${escapeHTML(s)}</span>`;
+        return `<span data-semantic-id="${semanticId}">${escapeHTML(s)}</span>`;
       }).join(' ');
       
-      currentNode.innerHTML = wrappedHTML;
+      node.innerHTML = wrappedHTML;
     } else if (highlightMode === 'words') {
       // Split on spacing
       const words = cleanText.split(/\s+/).filter(w => w.trim().length > 1);
@@ -122,10 +128,10 @@ function extractTextElements(highlightMode = 'sentences') {
           id: semanticId,
           text: w.trim()
         });
-        return `<span data-semantic-id="${semanticId}" class="semantic-word">${escapeHTML(w)}</span>`;
+        return `<span data-semantic-id="${semanticId}">${escapeHTML(w)}</span>`;
       }).join('');
       
-      currentNode.innerHTML = wrappedHTML;
+      node.innerHTML = wrappedHTML;
     }
   }
   
