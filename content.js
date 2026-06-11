@@ -1,13 +1,26 @@
-// Map to store original styles for restoring them later
+// Map to store original styles and HTML structure for restoring them later
 let originalStyles = new Map();
+let originalInnerHTMLs = new Map();
 let lastResults = null;
 let lastColorMode = 'hsl';
 let lastStyleMode = 'background';
 let lastOpacity = 0.4;
 
-// Traverse DOM and extract text-bearing elements
-function extractTextElements() {
-  // Clear any old semantic attributes first
+function escapeHTML(str) {
+  return str.replace(/[&<>'"]/g, 
+    tag => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      "'": '&#39;',
+      '"': '&quot;'
+    }[tag] || tag)
+  );
+}
+
+// Traverse DOM and extract text-bearing elements based on granularity (words, sentences, paragraphs)
+function extractTextElements(highlightMode = 'sentences') {
+  // Clear any old semantic attributes and reset DOM first
   clearHeatmap();
   
   const elements = [];
@@ -18,7 +31,6 @@ function extractTextElements() {
     NodeFilter.SHOW_ELEMENT,
     {
       acceptNode: function(node) {
-        // Skip code, scripting, and hidden/structural elements
         const skipTags = [
           'SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'SVG', 'PATH', 
           'TEXTAREA', 'INPUT', 'SELECT', 'PRE', 'CODE', 'HEAD', 
@@ -39,37 +51,81 @@ function extractTextElements() {
           return NodeFilter.FILTER_REJECT;
         }
         
-        return NodeFilter.FILTER_ACCEPT;
+        // Identify pure leaf text containers: has text child nodes, but NO element child nodes
+        let hasDirectText = false;
+        let hasElementChildren = false;
+        for (let i = 0; i < node.childNodes.length; i++) {
+          const child = node.childNodes[i];
+          if (child.nodeType === Node.TEXT_NODE && child.textContent.trim().length > 0) {
+            hasDirectText = true;
+          }
+          if (child.nodeType === Node.ELEMENT_NODE) {
+            hasElementChildren = true;
+          }
+        }
+        
+        if (hasDirectText && !hasElementChildren) {
+          return NodeFilter.FILTER_ACCEPT;
+        }
+        
+        return NodeFilter.FILTER_SKIP;
       }
     }
   );
 
   let currentNode;
   while (currentNode = walker.nextNode()) {
-    // Extract direct text contents (exclude texts of nested children)
-    let directText = '';
-    for (let i = 0; i < currentNode.childNodes.length; i++) {
-      const child = currentNode.childNodes[i];
-      if (child.nodeType === Node.TEXT_NODE) {
-        directText += child.textContent;
-      }
+    const cleanText = currentNode.textContent.replace(/\s+/g, ' ').trim();
+    
+    // Skip if empty or matches formatting filter
+    if (cleanText.length <= 2 || /^[0-9\s\p{P}]+$/u.test(cleanText)) {
+      continue;
     }
     
-    const cleanText = directText.replace(/\s+/g, ' ').trim();
+    // Backup original DOM layout of the container node
+    if (!originalInnerHTMLs.has(currentNode)) {
+      originalInnerHTMLs.set(currentNode, currentNode.innerHTML);
+    }
     
-    // Filter out very short texts, pure numbers, or common symbols
-    if (cleanText.length > 2 && cleanText.length < 400) {
-      if (/^[0-9\s\p{P}]+$/u.test(cleanText)) {
-        continue;
-      }
-      
+    if (highlightMode === 'paragraphs') {
       const semanticId = `sem-${idCounter++}`;
       currentNode.setAttribute('data-semantic-id', semanticId);
-      
       elements.push({
         id: semanticId,
         text: cleanText
       });
+    } else if (highlightMode === 'sentences') {
+      // Split cleanText on punctuation mark boundary
+      const sentences = cleanText.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 2);
+      
+      if (sentences.length === 0) continue;
+      
+      const wrappedHTML = sentences.map(s => {
+        const semanticId = `sem-${idCounter++}`;
+        elements.push({
+          id: semanticId,
+          text: s.trim()
+        });
+        return `<span data-semantic-id="${semanticId}" class="semantic-sentence">${escapeHTML(s)}</span>`;
+      }).join(' ');
+      
+      currentNode.innerHTML = wrappedHTML;
+    } else if (highlightMode === 'words') {
+      // Split on spacing
+      const words = cleanText.split(/\s+/).filter(w => w.trim().length > 1);
+      
+      if (words.length === 0) continue;
+      
+      const wrappedHTML = words.map(w => {
+        const semanticId = `sem-${idCounter++}`;
+        elements.push({
+          id: semanticId,
+          text: w.trim()
+        });
+        return `<span data-semantic-id="${semanticId}" class="semantic-word">${escapeHTML(w)}</span>`;
+      }).join('');
+      
+      currentNode.innerHTML = wrappedHTML;
     }
   }
   
@@ -143,8 +199,21 @@ function applyColors(results, colorMode, styleMode, opacity) {
   });
 }
 
-// Clear heatmap and restore original elements styling
+// Clear heatmap and restore original elements styling & DOM nodes
 function clearHeatmap() {
+  // First, restore split HTML blocks
+  originalInnerHTMLs.forEach((html, container) => {
+    try {
+      if (document.body.contains(container)) {
+        container.innerHTML = html;
+      }
+    } catch (e) {
+      // Container might have been removed
+    }
+  });
+  originalInnerHTMLs.clear();
+
+  // Then restore original inline styles on other modified elements
   originalStyles.forEach((style, el) => {
     try {
       if (document.body.contains(el)) {
@@ -169,7 +238,7 @@ function clearHeatmap() {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'SCAN_DOM') {
     try {
-      const elements = extractTextElements();
+      const elements = extractTextElements(message.highlightMode);
       sendResponse({ status: 'success', elements: elements });
     } catch (e) {
       sendResponse({ status: 'error', message: e.message });

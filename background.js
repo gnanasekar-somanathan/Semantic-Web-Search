@@ -239,7 +239,35 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           };
         });
         
-        sendResponse({ status: 'success', results: results });
+        // Calculate LexRank Centrality Score to find Key Insight
+        let keyInsightText = 'No key concept extracted.';
+        if (N > 0) {
+          const scores = new Array(N).fill(0);
+          for (let i = 0; i < N; i++) {
+            for (let j = 0; j < N; j++) {
+              if (i === j) continue;
+              let sim = 0;
+              for (let k = 0; k < D; k++) {
+                sim += vectors[i][k] * vectors[j][k];
+              }
+              scores[i] += sim;
+            }
+          }
+          
+          let maxScoreIndex = 0;
+          let maxScore = -Infinity;
+          for (let i = 0; i < N; i++) {
+            if (scores[i] > maxScore) {
+              maxScore = scores[i];
+              maxScoreIndex = i;
+            }
+          }
+          if (elements[maxScoreIndex]) {
+            keyInsightText = elements[maxScoreIndex].text;
+          }
+        }
+
+        sendResponse({ status: 'success', results: results, keyInsight: keyInsightText });
       })
       .catch((error) => {
         sendResponse({ status: 'error', message: error.message });

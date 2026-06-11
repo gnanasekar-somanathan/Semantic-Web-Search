@@ -21,33 +21,24 @@
 
   <!-- Section 1: Settings -->
   <div class="card">
-    <h2 class="section-title">Configuration</h2>
+    <h2 class="section-title">Extension Settings</h2>
     
     <!-- Model Selection -->
     <div class="form-group">
-      <label for="model-select">Embedding Model</label>
+      <label for="model-select">AI Model Select</label>
       <select id="model-select">
-        <option value="Xenova/all-MiniLM-L6-v2">MiniLM-L6 (Fast, 90MB)</option>
-        <option value="Xenova/bge-small-en-v1.5">BGE-Small (Accurate, 120MB)</option>
+        <option value="Xenova/all-MiniLM-L6-v2">all-MiniLM-L6 (Local, Fast)</option>
+        <option value="Xenova/bge-small-en-v1.5">BGE-Small (Local, Accurate)</option>
       </select>
     </div>
 
-    <!-- Color Space -->
-    <div class="form-group">
-      <label>Color Space</label>
-      <div class="segmented-control" id="color-mode-select">
-        <button class="active" data-value="hsl">Perceptual HSL</button>
-        <button data-value="rgb">Raw RGB</button>
-      </div>
-    </div>
-
-    <!-- Style Representation -->
+    <!-- Highlight Granularity Mode -->
     <div class="form-group">
       <label>Highlight Mode</label>
-      <div class="segmented-control" id="style-mode-select">
-        <button class="active" data-value="background">Background</button>
-        <button data-value="border">Border</button>
-        <button data-value="text">Text</button>
+      <div class="segmented-control" id="highlight-mode-select">
+        <button data-value="words">Words</button>
+        <button class="active" data-value="sentences">Sentences</button>
+        <button data-value="paragraphs">Paragraphs</button>
       </div>
     </div>
 
@@ -61,19 +52,22 @@
     </div>
   </div>
 
-  <!-- Section 2: Action & Progress -->
+  <!-- Section 2: Active Analysis -->
   <div class="card">
     <div id="status-container">
       <div class="status-label">
-        <span>Status</span>
-        <span id="status-text">Ready</span>
+        <span style="font-weight: 500; font-size: 13px; color: #a78bfa; letter-spacing: 0.5px; text-transform: uppercase;">Active Analysis</span>
+        <span id="analysis-badge" class="badge-inactive">INACTIVE</span>
       </div>
-      <div class="progress-track">
+      <div class="status-label" style="margin-top: 4px; font-size: 11px; color: #94a3b8;">
+        <span>Status: <span id="status-text" style="font-weight: 600; color: #3b82f6;">Ready</span></span>
+      </div>
+      <div class="progress-track" style="margin-top: 6px;">
         <div class="progress-bar" id="progress-bar"></div>
       </div>
     </div>
 
-    <button id="btn-generate" class="btn-primary">
+    <button id="btn-generate" class="btn-primary" style="margin-top: 12px;">
       <span>Generate Heatmap</span>
     </button>
     <button id="btn-clear" class="btn-secondary">Clear Visuals</button>
@@ -88,13 +82,23 @@
         <button id="btn-search" class="btn-primary" style="width: auto; margin-bottom: 0; padding: 8px 16px; min-width: 80px;">Search</button>
       </div>
     </div>
-    <div id="search-results-container" style="display: none;">
+    
+    <!-- Search Results Container -->
+    <div id="search-results-container" style="display: none; margin-bottom: 14px;">
       <div style="display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
         <span>Top Matches</span>
         <button id="btn-clear-search" style="background: none; border: none; color: #f472b6; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 500; text-transform: uppercase;">Clear</button>
       </div>
-      <div id="search-results-list">
+      <div id="search-results-list" style="max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px;">
         <!-- Injected search results -->
+      </div>
+    </div>
+
+    <!-- Insights display box -->
+    <div id="insights-container" style="border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 12px; margin-top: 12px; text-align: left;">
+      <label style="color: #a78bfa; font-weight: 600;">Key Insights</label>
+      <div id="insights-text" style="font-size: 12px; color: #94a3b8; line-height: 1.5; font-style: italic; background: rgba(0,0,0,0.15); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.04);">
+        Scan the page to identify the core concepts.
       </div>
     </div>
   </div>
@@ -104,11 +108,11 @@
     <h2 class="section-title">Heatmap Legend</h2>
     <div class="legend-gradient"></div>
     <div class="legend-labels">
-      <span>Concept Alpha</span>
-      <span>Concept Beta</span>
-      <span>Concept Gamma</span>
+      <span>Topic Cluster A</span>
+      <span>Topic Cluster B</span>
+      <span>Topic Cluster C</span>
     </div>
-    <div class="info-row">
+    <div class="info-row" style="margin-top: 10px;">
       <span>Elements mapped:</span>
       <span class="info-val" id="elements-count">0</span>
     </div>

@@ -1,7 +1,6 @@
 // DOM elements
 const modelSelect = document.getElementById('model-select');
-const colorModeContainer = document.getElementById('color-mode-select');
-const styleModeContainer = document.getElementById('style-mode-select');
+const highlightModeContainer = document.getElementById('highlight-mode-select');
 const opacitySlider = document.getElementById('opacity-slider');
 const opacityVal = document.getElementById('opacity-val');
 const btnGenerate = document.getElementById('btn-generate');
@@ -10,6 +9,8 @@ const statusText = document.getElementById('status-text');
 const progressBar = document.getElementById('progress-bar');
 const legendCard = document.getElementById('legend-card');
 const elementsCount = document.getElementById('elements-count');
+const analysisBadge = document.getElementById('analysis-badge');
+const insightsText = document.getElementById('insights-text');
 
 // Search DOM elements
 const searchCard = document.getElementById('search-card');
@@ -20,25 +21,27 @@ const searchResultsList = document.getElementById('search-results-list');
 const btnClearSearch = document.getElementById('btn-clear-search');
 
 // State
-let selectedColorMode = 'hsl';
-let selectedStyleMode = 'background';
+let selectedHighlightMode = 'sentences';
 let activeResults = null;
+let activeKeyInsight = null;
 
 // Initialize Settings and Listeners
 document.addEventListener('DOMContentLoaded', async () => {
   // Load saved configurations
-  const settings = await chrome.storage.local.get(['model', 'colorMode', 'styleMode', 'opacity', 'activeResults', 'scannedCount']);
+  const settings = await chrome.storage.local.get([
+    'model', 
+    'highlightMode', 
+    'opacity', 
+    'activeResults', 
+    'keyInsight',
+    'scannedCount'
+  ]);
   
   if (settings.model) modelSelect.value = settings.model;
   
-  if (settings.colorMode) {
-    selectedColorMode = settings.colorMode;
-    updateSegmentedActive(colorModeContainer, selectedColorMode);
-  }
-  
-  if (settings.styleMode) {
-    selectedStyleMode = settings.styleMode;
-    updateSegmentedActive(styleModeContainer, selectedStyleMode);
+  if (settings.highlightMode) {
+    selectedHighlightMode = settings.highlightMode;
+    updateSegmentedActive(highlightModeContainer, selectedHighlightMode);
   }
   
   if (settings.opacity) {
@@ -48,12 +51,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (settings.activeResults) {
     activeResults = settings.activeResults;
+    activeKeyInsight = settings.keyInsight || 'No core concepts extracted.';
+    
+    // Restore Visual Elements
     legendCard.style.display = 'block';
     searchCard.style.display = 'block';
     elementsCount.textContent = settings.scannedCount || activeResults.length;
-    statusText.textContent = 'Active Heatmap';
-    statusText.style.color = '#10b981'; // Green
-    progressBar.style.width = '100%';
+    
+    // Restore Badge & Status
+    setAnalysisBadgeActive(true);
+    updateProgressBar(100, 'Heatmap Active');
+    
+    // Restore Insights Text
+    insightsText.textContent = activeKeyInsight;
   }
 
   // Setup Event Listeners
@@ -65,17 +75,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     updatePageStyling();
   });
 
-  // Segmented controls listeners
-  setupSegmentedListener(colorModeContainer, (val) => {
-    selectedColorMode = val;
+  // Highlight Mode Granularity buttons listener
+  setupSegmentedListener(highlightModeContainer, (val) => {
+    selectedHighlightMode = val;
     saveSettings();
-    updatePageStyling();
-  });
-
-  setupSegmentedListener(styleModeContainer, (val) => {
-    selectedStyleMode = val;
-    saveSettings();
-    updatePageStyling();
   });
 
   // Action Buttons
@@ -90,13 +93,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   btnClearSearch.addEventListener('click', handleClearSearch);
 });
 
-// Setup Segmented Buttons
+// Setup Segmented Buttons Toggle
 function setupSegmentedListener(container, callback) {
   container.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
     
-    // Toggle active class
     container.querySelectorAll('button').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     
@@ -104,7 +106,7 @@ function setupSegmentedListener(container, callback) {
   });
 }
 
-// Update Active Segment
+// Update Active Segment styling
 function updateSegmentedActive(container, value) {
   container.querySelectorAll('button').forEach(b => {
     if (b.dataset.value === value) {
@@ -115,30 +117,30 @@ function updateSegmentedActive(container, value) {
   });
 }
 
-// Save Settings to Chrome Local Storage
+// Save Settings to Local Storage
 async function saveSettings() {
   await chrome.storage.local.set({
     model: modelSelect.value,
-    colorMode: selectedColorMode,
-    styleMode: selectedStyleMode,
+    highlightMode: selectedHighlightMode,
     opacity: parseFloat(opacitySlider.value),
     activeResults: activeResults,
+    keyInsight: activeKeyInsight,
     scannedCount: elementsCount.textContent
   });
 }
 
-// Update settings dynamically on active webpage (instant visual feedback)
+// Update highlighting opacity on active page (real-time slider drag feedback)
 async function updatePageStyling() {
   const tab = await getActiveTab();
   if (!tab) return;
   
   chrome.tabs.sendMessage(tab.id, {
     action: 'UPDATE_STYLING',
-    colorMode: selectedColorMode,
-    styleMode: selectedStyleMode,
+    colorMode: 'hsl',
+    styleMode: 'background',
     opacity: parseFloat(opacitySlider.value)
   }).catch(() => {
-    // Fail silently if content script not loaded
+    // Fail silently if content script not injected yet
   });
 }
 
@@ -159,17 +161,22 @@ function sendTabMessage(tabId, message) {
 // Scan DOM - Inject Content Script if necessary
 async function executeScan(tabId) {
   try {
-    return await sendTabMessage(tabId, { action: 'SCAN_DOM' });
+    return await sendTabMessage(tabId, { 
+      action: 'SCAN_DOM', 
+      highlightMode: selectedHighlightMode 
+    });
   } catch (err) {
-    // Inject and try again
+    // Dynamically inject script on older tabs
     try {
       await chrome.scripting.executeScript({
         target: { tabId: tabId },
         files: ['content.js']
       });
-      // Pause briefly for injection to compile
       await new Promise(r => setTimeout(r, 150));
-      return await sendTabMessage(tabId, { action: 'SCAN_DOM' });
+      return await sendTabMessage(tabId, { 
+        action: 'SCAN_DOM', 
+        highlightMode: selectedHighlightMode 
+      });
     } catch (injectErr) {
       throw new Error('Script injection blocked on this page.');
     }
@@ -185,16 +192,16 @@ chrome.runtime.onMessage.addListener((message) => {
       const percent = data.progress ? Math.round(data.progress) : 0;
       const cleanFileName = file.split('/').pop() || '';
       statusText.textContent = `Downloading ${cleanFileName.substring(0, 12)}... ${percent}%`;
-      statusText.style.color = '#f59e0b'; // Amber
+      statusText.style.color = '#f59e0b';
       progressBar.style.width = `${percent}%`;
     } else if (data.status === 'done') {
       statusText.textContent = `Processing embeddings...`;
-      statusText.style.color = '#3b82f6'; // Blue
+      statusText.style.color = '#3b82f6';
     }
   }
 });
 
-// Get Current Tab
+// Get Current Active Tab
 async function getActiveTab() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   return tabs[0];
@@ -214,11 +221,11 @@ async function handleGenerate() {
     return;
   }
 
-  setUIState(true); // Disable buttons, start loader
+  setUIState(true);
   updateProgressBar(10, 'Scanning webpage...');
   
   try {
-    // 1. Scan page for text elements
+    // 1. Scan page for text elements at selected granularity
     const scanResponse = await executeScan(tab.id);
     if (!scanResponse || scanResponse.status !== 'success') {
       throw new Error(scanResponse ? scanResponse.message : 'Failed to scan DOM.');
@@ -229,7 +236,7 @@ async function handleGenerate() {
       throw new Error('No text elements found to map.');
     }
     
-    updateProgressBar(30, 'Initializing model...');
+    updateProgressBar(35, 'Initializing model...');
     
     // 2. Pre-load model to warm it up
     const modelId = modelSelect.value;
@@ -245,7 +252,7 @@ async function handleGenerate() {
       });
     });
 
-    updateProgressBar(50, 'Extracting vectors...');
+    updateProgressBar(55, 'Extracting vectors...');
 
     // 3. Process text vectors in background worker
     const processResponse = await new Promise((resolve, reject) => {
@@ -266,13 +273,14 @@ async function handleGenerate() {
 
     updateProgressBar(90, 'Rendering heatmap...');
     activeResults = processResponse.results;
+    activeKeyInsight = processResponse.keyInsight || 'No core concepts extracted.';
     
-    // 4. Send colors back to page content script
+    // 4. Send colors back to page content script (Default to Background HSL heatmap)
     const applyResponse = await sendTabMessage(tab.id, {
       action: 'APPLY_COLORS',
       results: activeResults,
-      colorMode: selectedColorMode,
-      styleMode: selectedStyleMode,
+      colorMode: 'hsl',
+      styleMode: 'background',
       opacity: parseFloat(opacitySlider.value)
     });
     
@@ -280,18 +288,21 @@ async function handleGenerate() {
       throw new Error('Failed to paint colors onto the page.');
     }
 
-    // Success! Update interface details
+    // Success! Update UI details
     updateProgressBar(100, 'Heatmap Active');
-    statusText.style.color = '#10b981'; // Green
+    setAnalysisBadgeActive(true);
+    
     legendCard.style.display = 'block';
     searchCard.style.display = 'block';
     elementsCount.textContent = elements.length;
+    insightsText.textContent = activeKeyInsight;
+    
     await saveSettings();
 
   } catch (error) {
     showError(error.message);
   } finally {
-    setUIState(false); // Enable controls
+    setUIState(false);
   }
 }
 
@@ -303,39 +314,57 @@ async function handleClear() {
   setUIState(true);
   try {
     await sendTabMessage(tab.id, { action: 'CLEAR_HEATMAP' });
+    
+    // Reset State
     activeResults = null;
+    activeKeyInsight = null;
+    
+    // Reset UI Card Displays
     legendCard.style.display = 'none';
     searchCard.style.display = 'none';
     searchResultsContainer.style.display = 'none';
     searchInput.value = '';
     searchResultsList.innerHTML = '';
+    insightsText.textContent = 'Scan the page to identify the core concepts.';
+    
+    // Reset status & badge
+    setAnalysisBadgeActive(false);
     updateProgressBar(0, 'Ready');
-    statusText.style.color = '#3b82f6';
+    
     await saveSettings();
   } catch (error) {
     console.error('Error clearing page styles:', error);
-    // Even if communication fails, reset local storage
+    // Force local state reset even if connection fails
     activeResults = null;
+    activeKeyInsight = null;
     legendCard.style.display = 'none';
     searchCard.style.display = 'none';
     searchResultsContainer.style.display = 'none';
-    searchInput.value = '';
-    searchResultsList.innerHTML = '';
+    setAnalysisBadgeActive(false);
     updateProgressBar(0, 'Ready');
-    statusText.style.color = '#3b82f6';
     await saveSettings();
   } finally {
     setUIState(false);
   }
 }
 
-// Toggle UI element active state
+// Toggle Main UI elements disabled state
 function setUIState(processing) {
   btnGenerate.disabled = processing;
   btnClear.disabled = processing;
   modelSelect.disabled = processing;
   searchInput.disabled = processing;
   btnSearch.disabled = processing;
+  highlightModeContainer.querySelectorAll('button').forEach(b => b.disabled = processing);
+}
+
+// Toggle Search UI elements disabled state
+function setSearchUIState(searching) {
+  btnSearch.disabled = searching;
+  searchInput.disabled = searching;
+  btnClearSearch.disabled = searching;
+  btnGenerate.disabled = searching;
+  btnClear.disabled = searching;
 }
 
 // Update Progress Display
@@ -343,19 +372,31 @@ function updateProgressBar(percent, text) {
   progressBar.style.width = `${percent}%`;
   statusText.textContent = text;
   if (text.includes('Error')) {
-    statusText.style.color = '#ef4444'; // Red
+    statusText.style.color = '#ef4444';
   } else if (percent === 100) {
-    statusText.style.color = '#10b981'; // Green
+    statusText.style.color = '#10b981';
   } else {
-    statusText.style.color = '#3b82f6'; // Blue
+    statusText.style.color = '#3b82f6';
   }
 }
 
-// Show error message helper
+// Show error helper
 function showError(msg) {
   progressBar.style.width = '0%';
   statusText.textContent = `Error: ${msg}`;
   statusText.style.color = '#ef4444';
+  setAnalysisBadgeActive(false);
+}
+
+// Set badge active/inactive
+function setAnalysisBadgeActive(active) {
+  if (active) {
+    analysisBadge.textContent = 'ANALYSIS ACTIVE';
+    analysisBadge.className = 'badge-active';
+  } else {
+    analysisBadge.textContent = 'INACTIVE';
+    analysisBadge.className = 'badge-inactive';
+  }
 }
 
 // Semantic Search Trigger
@@ -457,13 +498,4 @@ async function handleClearSearch() {
   } finally {
     setSearchUIState(false);
   }
-}
-
-// Toggle Search UI active state
-function setSearchUIState(searching) {
-  btnSearch.disabled = searching;
-  searchInput.disabled = searching;
-  btnClearSearch.disabled = searching;
-  btnGenerate.disabled = searching;
-  btnClear.disabled = searching;
 }
