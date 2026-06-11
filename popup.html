@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Semantic Heatmap</title>
+  <!-- Google Fonts: Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <div class="title-container">
+      <div class="logo-glow"></div>
+      <h1>Semantic Heatmap</h1>
+    </div>
+    <p>Transformers.js DOM Visualizer</p>
+  </header>
+
+  <!-- Section 1: Settings -->
+  <div class="card">
+    <h2 class="section-title">Configuration</h2>
+    
+    <!-- Model Selection -->
+    <div class="form-group">
+      <label for="model-select">Embedding Model</label>
+      <select id="model-select">
+        <option value="Xenova/all-MiniLM-L6-v2">MiniLM-L6 (Fast, 90MB)</option>
+        <option value="Xenova/bge-small-en-v1.5">BGE-Small (Accurate, 120MB)</option>
+      </select>
+    </div>
+
+    <!-- Color Space -->
+    <div class="form-group">
+      <label>Color Space</label>
+      <div class="segmented-control" id="color-mode-select">
+        <button class="active" data-value="hsl">Perceptual HSL</button>
+        <button data-value="rgb">Raw RGB</button>
+      </div>
+    </div>
+
+    <!-- Style Representation -->
+    <div class="form-group">
+      <label>Highlight Mode</label>
+      <div class="segmented-control" id="style-mode-select">
+        <button class="active" data-value="background">Background</button>
+        <button data-value="border">Border</button>
+        <button data-value="text">Text</button>
+      </div>
+    </div>
+
+    <!-- Opacity Slider -->
+    <div class="form-group">
+      <label for="opacity-slider">Highlight Opacity</label>
+      <div class="slider-container">
+        <input type="range" id="opacity-slider" min="0.1" max="1.0" step="0.05" value="0.4">
+        <span class="slider-val" id="opacity-val">40%</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2: Action & Progress -->
+  <div class="card">
+    <div id="status-container">
+      <div class="status-label">
+        <span>Status</span>
+        <span id="status-text">Ready</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+    </div>
+
+    <button id="btn-generate" class="btn-primary">
+      <span>Generate Heatmap</span>
+    </button>
+    <button id="btn-clear" class="btn-secondary">Clear Visuals</button>
+  </div>
+
+  <!-- Section: Semantic Search -->
+  <div class="card" id="search-card" style="display: none;">
+    <h2 class="section-title">Semantic Search</h2>
+    <div class="form-group">
+      <div style="display: flex; gap: 8px;">
+        <input type="text" id="search-input" placeholder="Type query, e.g. 'machine learning'...">
+        <button id="btn-search" class="btn-primary" style="width: auto; margin-bottom: 0; padding: 8px 16px; min-width: 80px;">Search</button>
+      </div>
+    </div>
+    <div id="search-results-container" style="display: none;">
+      <div style="display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+        <span>Top Matches</span>
+        <button id="btn-clear-search" style="background: none; border: none; color: #f472b6; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 500; text-transform: uppercase;">Clear</button>
+      </div>
+      <div id="search-results-list">
+        <!-- Injected search results -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 3: Legend / Information -->
+  <div class="card" id="legend-card" style="display: none;">
+    <h2 class="section-title">Heatmap Legend</h2>
+    <div class="legend-gradient"></div>
+    <div class="legend-labels">
+      <span>Concept Alpha</span>
+      <span>Concept Beta</span>
+      <span>Concept Gamma</span>
+    </div>
+    <div class="info-row">
+      <span>Elements mapped:</span>
+      <span class="info-val" id="elements-count">0</span>
+    </div>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
